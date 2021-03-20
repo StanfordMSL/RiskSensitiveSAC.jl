@@ -15,6 +15,7 @@ ado_vel_dict = Dict("Any" => MvNormal([0.0, 0.0], Diagonal([0.8, 0.8])));       
 prediction_rng_seed = 1;                                                            # random seed for prediction (and stochastic transition for "synthetic" scenes)
 deterministic = false;                                                              # if true, a single, deterministic sample is drawn regardless of random seed. (num_samples = 1 is needed)
 num_samples = 30;                                                                   # number of trajectory samples (per ado agent)
+dto = 0.4;                                                                          # observation update time interval [s]
 # Cost Parameters
 include("params_cost.jl")
 # Control Parameters

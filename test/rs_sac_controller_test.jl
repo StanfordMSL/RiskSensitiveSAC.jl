@@ -36,16 +36,16 @@ prediction_steps = 12;
 use_robot_future = false;
 deterministic = false;
 rng_seed_py = 1;
+dto = scene_loader.dto;
 predictor_param = TrajectronPredictorParameter(prediction_steps, num_samples,
                                                use_robot_future, deterministic,
-                                               rng_seed_py);
+                                               rng_seed_py, dto);
 traj_predictor = TrajectronPredictor(predictor_param,
                                      scene_loader.model_dir,
                                      scene_loader.param.conf_file_name,
                                      device, verbose=false);
 initialize_scene_graph!(traj_predictor, scene_loader);
-ado_states = fetch_ado_positions!(scene_loader, return_full_state=true);
-ado_positions = reduce_to_positions(ado_states);
+ado_positions = fetch_ado_positions!(scene_loader);
 
 dtc = 0.01;
 sim_param = SimulationParameter(scene_loader, traj_predictor, dtc, cost_param);
@@ -78,7 +78,7 @@ cnt_param = ControlParameter(eamax, tcalc, dtexec, dtr, u_nominal_base,
                              constraint_time=constraint_time);
 # Prediction Dict
 prediction_dict = sample_future_ado_positions!(traj_predictor,
-                                               ado_states);
+                                               ado_positions);
 num_controls = length(cnt_param.u_nominal_cand)^nominal_search_depth;
 for key in keys(prediction_dict)
     prediction_dict[key] = repeat(prediction_dict[key], outer=(num_controls, 1, 1));
@@ -178,10 +178,9 @@ traj_predictor = TrajectronPredictor(predictor_param,
                                      scene_loader.param.conf_file_name,
                                      device, verbose=false);
 initialize_scene_graph!(traj_predictor, scene_loader);
-ado_states = fetch_ado_positions!(scene_loader, return_full_state=true);
-ado_positions = reduce_to_positions(ado_states);
+ado_positions = fetch_ado_positions!(scene_loader);
 
-schedule_prediction!(controller, ado_states);
+schedule_prediction!(controller, ado_positions);
 wait(controller.prediction_task);
 @test istaskdone(controller.prediction_task);
 @test controller.prediction_dict_tmp["PEDESTRIAN/25"][1:50, :, :] ==

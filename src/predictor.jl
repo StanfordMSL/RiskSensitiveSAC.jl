@@ -7,6 +7,7 @@
 
 using LinearAlgebra
 using PyCall
+using DataStructures
 using Distributions
 
 abstract type Predictor end;
@@ -18,11 +19,13 @@ struct TrajectronPredictorParameter <: Parameter
     use_robot_future::Bool     # Whether Trajectron is conditioned on the robot future.
     deterministic::Bool        # Use mode-mode sampling for deterministic prediction.
     rng_seed_py::Int64         # rng seed (Trajectron)
+    dto::Float64               # Time Interval for Discrete-time Dynamics
 end
 
 mutable struct TrajectronPredictor <: Predictor
     param::TrajectronPredictorParameter
     trajectron::PyObject       # Trajectron model
+    ado_buffer::Dict{PyObject, Queue{Union{Vector{Float64}, Nothing}}}
     edge_addition_filter::PyObject
     edge_removal_filter::PyObject
 end
@@ -68,7 +71,9 @@ function TrajectronPredictor(param::TrajectronPredictorParameter,
         end
     end
 
-    return TrajectronPredictor(param, trajectron,
+    ado_buffer = Dict{PyObject, Queue{Union{Vector{Float64}, Nothing}}}();
+
+    return TrajectronPredictor(param, trajectron, ado_buffer,
                                pycall(hyperparams.get, PyObject, "edge_addition_filter"),
                                pycall(hyperparams.get, PyObject, "edge_removal_filter"))
 end
@@ -93,8 +98,54 @@ function initialize_scene_graph!(predictor::TrajectronPredictor,
     predictor.trajectron.set_environment(online_env, scene_loader.curr_time_idx - 1)
 end
 
+function update_ado_buffer!(predictor::TrajectronPredictor,
+                            ado_pos_dict::Dict{PyObject, Vector{Float64}})
+    new_ado_array = setdiff(keys(ado_pos_dict), keys(predictor.ado_buffer));
+    for key in keys(predictor.ado_buffer)
+        if haskey(ado_pos_dict, key)
+            enqueue!(predictor.ado_buffer[key], ado_pos_dict[key]);
+        else
+            enqueue!(predictor.ado_buffer[key], nothing);
+        end
+        if length(predictor.ado_buffer[key]) > 3
+            dequeue!(predictor.ado_buffer[key])
+        end
+        if all(isnothing.(predictor.ado_buffer[key]))
+            delete!(predictor.ado_buffer, key)
+        end
+    end
+    for new_ado in new_ado_array
+        predictor.ado_buffer[new_ado] = Queue{Union{Nothing, Vector{Float64}}}();
+        enqueue!(predictor.ado_buffer[new_ado], ado_pos_dict[new_ado]);
+    end
+end
+
+function get_ado_input_dict(predictor::TrajectronPredictor,
+                            ado_pos_dict::Dict{PyObject, Vector{Float64}})
+    ado_input_dict = Dict{PyObject, Vector{Float64}}();
+    for key in keys(ado_pos_dict)
+        @assert pybuiltin("str")(key.type) == "PEDESTRIAN" "Unsupported ado type: $(pybuiltin("str")(key.type))"
+        ado_input_dict[key] = zeros(6); # [px, py, vx, vy, ax, ay]
+        ado_input_dict[key][1:2] = ado_pos_dict[key];
+        p_array = collect(predictor.ado_buffer[key]);
+        if length(p_array) == 2
+            ado_input_dict[key][3:4] = (p_array[2] .- p_array[1])./predictor.param.dto;
+        elseif length(p_array) == 3
+            if !any(isnothing.(p_array))
+                ado_input_dict[key][3:4] = (p_array[3] .- p_array[2])./predictor.param.dto;
+                ado_input_dict[key][5:6] = (p_array[3] .- 2*p_array[2] .+ p_array[1])./(predictor.param.dto^2);
+            elseif !isnothing(p_array[1])
+                ado_input_dict[key][3:4] = (p_array[3] .- p_array[1])./(predictor.param.dto*2);
+            elseif !isnothing(p_array[2])
+                ado_input_dict[key][3:4] = (p_array[3] .- p_array[2])./predictor.param.dto;
+            end
+        end
+    end
+    return ado_input_dict;
+end
+
 function sample_future_ado_positions!(predictor::TrajectronPredictor,
-                                      ado_state_dict::Dict,
+                                      ado_pos_dict::Dict,
                                       robot_present_and_future::Union{Nothing, Array{Float64, 3}}=nothing)
     z_mode, gmm_mode = false, false
     if predictor.param.deterministic
@@ -106,16 +157,12 @@ function sample_future_ado_positions!(predictor::TrajectronPredictor,
     if predictor.param.use_robot_future
         @assert !isnothing(robot_present_and_future) "robot_present_and_future must not be nothing!"
     end
+    update_ado_buffer!(predictor, ado_pos_dict);
+    state_dict = get_ado_input_dict(predictor, ado_pos_dict);
     if !isnothing(robot_present_and_future)
-        state_dict = Dict{PyObject, Vector{Float64}}();
         robot_state = robot_present_and_future[1, 1, :];
         robot_node = predictor.trajectron.env.scenes[1].robot;
         state_dict[robot_node] = robot_state;
-        for key in keys(ado_state_dict)
-            state_dict[key] = ado_state_dict[key]
-        end
-    else
-        state_dict = ado_state_dict;
     end
     maps = nothing; # TODO: Implement maps if necessary.
     preds_py = predictor.trajectron.incremental_forward(state_dict, maps=maps,

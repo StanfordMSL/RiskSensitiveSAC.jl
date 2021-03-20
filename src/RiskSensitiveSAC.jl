@@ -241,6 +241,8 @@ include("scene_loader.jl")
 # Predictor
 export
     initialize_scene_graph!,
+    update_ado_buffer!,
+    get_ado_input_dict,
     sample_future_ado_positions!,
     Predictor,
     TrajectronPredictorParameter,

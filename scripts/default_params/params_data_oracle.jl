@@ -13,6 +13,7 @@ prediction_device = "cpu";                                                      
 deterministic = true;                                                               # if true, a single, deterministic sample is drawn regardless of random seed. (num_samples = 1 is needed)
 prediction_steps = 12;                                                              # number of steps to look ahead in the future
 num_samples = 1;                                                                    # number of trajectory samples (per ado agent)
+dto = 0.4;                                                                          # observation update time interval [s]
 # Cost Parameters
 include("params_cost.jl")
 # Control Parameters

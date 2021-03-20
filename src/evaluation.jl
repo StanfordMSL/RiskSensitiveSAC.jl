@@ -112,7 +112,6 @@ function evaluate(scene_loader::SceneLoader,
     end
     sleep(1.0)
     global ado_positions = nothing;
-    global ado_inputs = nothing;
 
     # Starting Simulation
     m_time_idx = 1;
@@ -126,8 +125,7 @@ function evaluate(scene_loader::SceneLoader,
             msg_1 = "New measurement is obtained."
             push!(log, (current_time, msg_1))
             if typeof(scene_loader) == TrajectronSceneLoader
-                ado_inputs = fetch_ado_positions!(scene_loader, return_full_state=true);
-                ado_positions = reduce_to_positions(ado_inputs);
+                ado_positions = fetch_ado_positions!(scene_loader)
                 if !isnothing(ado_id_removed)
                     key_to_remove = nothing
                     for key in keys(ado_positions)
@@ -136,7 +134,6 @@ function evaluate(scene_loader::SceneLoader,
                         end
                     end
                     delete!(ado_positions, key_to_remove)
-                    delete!(ado_inputs, key_to_remove)
                 end
             elseif typeof(scene_loader) == SyntheticSceneLoader
                 if typeof(controller) == RSSACController
@@ -157,10 +154,8 @@ function evaluate(scene_loader::SceneLoader,
                     push!(log, (current_time, msg_2))
                     if typeof(controller.predictor) == TrajectronPredictor &&
                         controller.predictor.param.use_robot_future
-                        schedule_prediction!(controller, ado_inputs, previous_ado_pos_dict,
+                        schedule_prediction!(controller, ado_positions, previous_ado_pos_dict,
                                              w_history[end].e_state);
-                    elseif typeof(controller.predictor) == TrajectronPredictor
-                        schedule_prediction!(controller, ado_inputs, previous_ado_pos_dict);
                     else
                         schedule_prediction!(controller, ado_positions, previous_ado_pos_dict);
                     end
@@ -305,10 +300,5 @@ function evaluate(scene_loader::SceneLoader,
                             w_history, u_history,
                             total_control_cost, total_position_cost, total_collision_cost, log);
     end
-    if typeof(controller) == RSSACController &&
-       typeof(controller.predictor) == TrajectronPredictor
-        return eval_result, controller, ado_inputs
-    else
-        return eval_result, controller, ado_positions
-    end
+    return eval_result, controller, ado_positions
 end

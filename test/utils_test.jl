@@ -225,6 +225,7 @@ end
     prediction_steps = 12;
     num_samples = 50;
     use_robot_future = false;
+    dto = 0.4;
     # Cost Parameters
     Cep = Matrix(1.0I, 2, 2);
     Cu = Matrix(1.0I, 2, 2);
@@ -259,7 +260,7 @@ end
                                                    num_samples,
                                                    use_robot_future,
                                                    deterministic,
-                                                   prediction_rng_seed);
+                                                   prediction_rng_seed, dto);
     cost_param = CostParameter(Cep, Cu, β_pos, α_col, β_col, λ_col, σ_risk);
     cnt_param = ControlParameter(u_norm_max, tcalc, dtexec, dtr,
                                  u_nominal_base, u_nominal_cand, nominal_search_depth);
@@ -334,6 +335,7 @@ end
     prediction_steps = 12;
     num_samples = 50;
     use_robot_future = false;
+    dto = 0.4;
     # Cost Parameters
     Cep = Matrix(1.0I, 2, 2);
     Cu = Matrix(1.0I, 2, 2);
@@ -364,7 +366,7 @@ end
                                                    num_samples,
                                                    use_robot_future,
                                                    deterministic,
-                                                   prediction_rng_seed);
+                                                   prediction_rng_seed, dto);
     cost_param = CostParameter(Cep, Cu, β_pos, α_col, β_col, λ_col, σ_risk);
     cnt_param = ControlParameter(u_norm_max, tcalc, dtexec, dtr,
                                  u_nominal_base, u_nominal_cand, nominal_search_depth);

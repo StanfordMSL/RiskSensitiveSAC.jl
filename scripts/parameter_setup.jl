@@ -34,7 +34,7 @@ elseif scene_mode == "data" && prediction_mode == "trajectron"
                                                    num_samples,
                                                    use_robot_future,
                                                    deterministic,
-                                                   prediction_rng_seed);
+                                                   prediction_rng_seed, dto);
     cost_param = CostParameter(Cep, Cu, β_pos, α_col, β_col, λ_col, σ_risk);
     cnt_param = ControlParameter(u_norm_max, tcalc, dtexec, dtr,
                                  u_nominal_base, u_nominal_cand, nominal_search_depth,

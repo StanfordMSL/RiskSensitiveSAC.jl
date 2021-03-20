@@ -122,6 +122,7 @@ function controller_setup(# Scene Loader parameters
     end
     scene_loader = TrajectronSceneLoader(scene_param, verbose=verbose,
                                          ado_id_removed=ado_id_to_replace);
+    @assert scene_loader.dto == predictor_param.dto "Inconsistent dto between scene_loader ($(scene_loader.dto)) and predictor ($(predictor_param.dto))."
     if !isnothing(ado_id_to_replace)
         @assert isnothing(ego_pos_init_vec) && isnothing(ego_vel_init_vec) &&
                 isnothing(ego_pos_goal_vec) && isnothing(target_speed)
@@ -160,8 +161,7 @@ function controller_setup(# Scene Loader parameters
     initialize_scene_graph!(predictor, scene_loader);
     sim_param = SimulationParameter(scene_loader, predictor, dtc, cost_param);
 
-    ado_inputs = fetch_ado_positions!(scene_loader, return_full_state=true);
-    ado_positions = reduce_to_positions(ado_inputs);
+    ado_positions = fetch_ado_positions!(scene_loader);
 
     if !isnothing(ado_id_to_replace)
         key_to_remove = nothing
@@ -171,7 +171,6 @@ function controller_setup(# Scene Loader parameters
             end
         end
         delete!(ado_positions, key_to_remove)
-        delete!(ado_inputs, key_to_remove)
 
         println("Note initial time is set to $(to_sec(t_init_new)) [s].")
         w_init, measurement_schedule =
@@ -203,9 +202,9 @@ function controller_setup(# Scene Loader parameters
     u_schedule = convert_to_schedule(w_init.t, cnt_param.u_nominal_base, sim_param);
     controller = RSSACController(predictor, u_schedule, sim_param, cnt_param);
     if predictor.param.use_robot_future
-        schedule_prediction!(controller, ado_inputs, nothing, w_init.e_state);
+        schedule_prediction!(controller, ado_positions, nothing, w_init.e_state);
     else
-        schedule_prediction!(controller, ado_inputs);
+        schedule_prediction!(controller, ado_positions);
     end
     wait(controller.prediction_task);
 
