@@ -238,6 +238,17 @@ export
     SyntheticSceneLoader
 include("scene_loader.jl")
 
+# Ado State Estimator
+export
+    StateEstimatorParameter,
+    StateEstimator,
+    PedestrianKFEstimatorParameter,
+    PedestrianKFEstimator,
+    initialize!,
+    estimator_predict!,
+    estimator_update!
+include("ado_state_estimator.jl")
+
 # Predictor
 export
     initialize_scene_graph!,

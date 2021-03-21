@@ -45,6 +45,8 @@ using Random
             if scene_loader.curr_time_idx - 1 == 2
                 @test Set(pybuiltin("str").(keys(predictor.ado_buffer))) ==
                       Set(["PEDESTRIAN/1", "PEDESTRIAN/2"]);
+                @test Set(pybuiltin("str").(keys(predictor.ado_estimator))) ==
+                      Set(pybuiltin("str").(keys(predictor.ado_buffer)))
                 for key in keys(ado_positions)
                     @test last(predictor.ado_buffer[key]) == ado_positions[key]
                 end
@@ -52,6 +54,8 @@ using Random
             elseif scene_loader.curr_time_idx - 1 == 3
                 @test Set(pybuiltin("str").(keys(predictor.ado_buffer))) ==
                       Set(["PEDESTRIAN/1", "PEDESTRIAN/2"]);
+                @test Set(pybuiltin("str").(keys(predictor.ado_estimator))) ==
+                      Set(pybuiltin("str").(keys(predictor.ado_buffer)))
                 for key in keys(ado_positions)
                     @test last(predictor.ado_buffer[key]) == ado_positions[key]
                 end
@@ -59,6 +63,8 @@ using Random
             elseif scene_loader.curr_time_idx - 1 == 4
                 @test Set(pybuiltin("str").(keys(predictor.ado_buffer))) ==
                       Set(["PEDESTRIAN/1", "PEDESTRIAN/2"]);
+                @test Set(pybuiltin("str").(keys(predictor.ado_estimator))) ==
+                      Set(pybuiltin("str").(keys(predictor.ado_buffer)))
                 for key in keys(ado_positions)
                     @test last(predictor.ado_buffer[key]) == ado_positions[key]
                 end
@@ -66,6 +72,8 @@ using Random
             elseif scene_loader.curr_time_idx - 1 == 5
                 @test Set(pybuiltin("str").(keys(predictor.ado_buffer))) ==
                       Set(["PEDESTRIAN/1", "PEDESTRIAN/2", "PEDESTRIAN/3"]);
+                @test Set(pybuiltin("str").(keys(predictor.ado_estimator))) ==
+                      Set(pybuiltin("str").(keys(predictor.ado_buffer)))
                 for key in keys(ado_positions)
                     @test last(predictor.ado_buffer[key]) == ado_positions[key]
                 end
@@ -82,6 +90,8 @@ using Random
             elseif scene_loader.curr_time_idx - 1 == 6
                 @test Set(pybuiltin("str").(keys(predictor.ado_buffer))) ==
                       Set(["PEDESTRIAN/1", "PEDESTRIAN/2", "PEDESTRIAN/3"]);
+                @test Set(pybuiltin("str").(keys(predictor.ado_estimator))) ==
+                      Set(pybuiltin("str").(keys(predictor.ado_buffer)))
                 for key in keys(ado_positions)
                     @test last(predictor.ado_buffer[key]) == ado_positions[key]
                 end
@@ -99,6 +109,8 @@ using Random
                 @test Set(pybuiltin("str").(keys(predictor.ado_buffer))) ==
                       Set(["PEDESTRIAN/2", "PEDESTRIAN/3", "PEDESTRIAN/4",
                            "PEDESTRIAN/5", "PEDESTRIAN/6"]);
+                @test Set(pybuiltin("str").(keys(predictor.ado_estimator))) ==
+                      Set(pybuiltin("str").(keys(predictor.ado_buffer)))
                 for key in keys(ado_positions)
                     @test last(predictor.ado_buffer[key]) == ado_positions[key]
                 end
@@ -127,31 +139,14 @@ using Random
                                         device, verbose=false);
         initialize_scene_graph!(predictor, scene_loader);
         ado_positions_array = Vector{Dict}();
-        while scene_loader.curr_time_idx < 5
+        while scene_loader.curr_time_idx < 8
             ado_positions = fetch_ado_positions!(scene_loader)
             push!(ado_positions_array, ado_positions);
             update_ado_buffer!(predictor, ado_positions)
             ado_states = get_ado_input_dict(predictor, ado_positions)
-            if scene_loader.curr_time_idx - 1 == 2
-                for key in keys(ado_positions)
-                    @test ado_states[key][1:2] == ado_positions[key];
-                    @test all(ado_states[key][3:6] .== 0.0);
-                end
-            elseif scene_loader.curr_time_idx - 1 == 3
-                for key in keys(ado_positions)
-                    @test ado_states[key][1:2] == ado_positions[key];
-                    @test all(ado_states[key][3:4] .≈
-                              (ado_positions_array[2][key] - ado_positions_array[1][key])./dto);
-                    @test all(ado_states[key][5:6] .== 0.0);
-                end
-            elseif scene_loader.curr_time_idx - 1 == 4
-                for key in keys(ado_positions)
-                    @test ado_states[key][1:2] == ado_positions[key];
-                    vel_curr = (ado_positions_array[3][key] - ado_positions_array[2][key])./dto;
-                    vel_prev = (ado_positions_array[2][key] - ado_positions_array[1][key])./dto;
-                    @test all(ado_states[key][3:4] .≈ vel_curr);
-                    @test all(ado_states[key][5:6] .≈ (vel_curr - vel_prev)./dto);
-                end
+            @test Set(keys(ado_states)) == Set(keys(ado_positions))
+            for key in keys(ado_positions)
+               @test all(isequal.(ado_positions[key], ado_states[key][1:2]))
             end
         end
     end

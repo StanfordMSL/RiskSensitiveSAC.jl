@@ -24,6 +24,8 @@ include("cost_test.jl")
 include("cost_gpu_test.jl")
 @info "Executing Scene Loader Test"
 include("scene_loader_test.jl")
+@info "Executing Ado State Estimator Test"
+include("ado_state_estimator_test.jl")
 @info "Executing Predictor Test"
 include("predictor_test.jl")
 @info "Executing Forward-Backward Simulation Test"

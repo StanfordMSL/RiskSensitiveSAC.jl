@@ -25,6 +25,7 @@ end
 mutable struct TrajectronPredictor <: Predictor
     param::TrajectronPredictorParameter
     trajectron::PyObject       # Trajectron model
+    ado_estimator::Dict{PyObject, PedestrianKFEstimator};
     ado_buffer::Dict{PyObject, Queue{Union{Vector{Float64}, Nothing}}}
     edge_addition_filter::PyObject
     edge_removal_filter::PyObject
@@ -71,9 +72,10 @@ function TrajectronPredictor(param::TrajectronPredictorParameter,
         end
     end
 
+    ado_estimator = Dict{PyObject, PedestrianKFEstimator}();
     ado_buffer = Dict{PyObject, Queue{Union{Vector{Float64}, Nothing}}}();
 
-    return TrajectronPredictor(param, trajectron, ado_buffer,
+    return TrajectronPredictor(param, trajectron, ado_estimator, ado_buffer,
                                pycall(hyperparams.get, PyObject, "edge_addition_filter"),
                                pycall(hyperparams.get, PyObject, "edge_removal_filter"))
 end
@@ -102,8 +104,10 @@ function update_ado_buffer!(predictor::TrajectronPredictor,
                             ado_pos_dict::Dict{PyObject, Vector{Float64}})
     new_ado_array = setdiff(keys(ado_pos_dict), keys(predictor.ado_buffer));
     for key in keys(predictor.ado_buffer)
+        estimator_predict!(predictor.ado_estimator[key]);
         if haskey(ado_pos_dict, key)
             enqueue!(predictor.ado_buffer[key], ado_pos_dict[key]);
+            estimator_update!(predictor.ado_estimator[key], ado_pos_dict[key]);
         else
             enqueue!(predictor.ado_buffer[key], nothing);
         end
@@ -112,10 +116,17 @@ function update_ado_buffer!(predictor::TrajectronPredictor,
         end
         if all(isnothing.(predictor.ado_buffer[key]))
             delete!(predictor.ado_buffer, key)
+            delete!(predictor.ado_estimator, key)
         end
     end
     for new_ado in new_ado_array
         predictor.ado_buffer[new_ado] = Queue{Union{Nothing, Vector{Float64}}}();
+        Q = diagm([0.0, 0.0, 0.001, 0.001, 1.0, 1.0]);
+        R = diagm([0.0, 0.0]);
+        Σ_init = diagm([0.0, 0.0, 3.0, 3.0, 3.0, 3.0]);
+        estimator_param = PedestrianKFEstimatorParameter(Q, R, Σ_init, predictor.param.dto);
+        predictor.ado_estimator[new_ado] = PedestrianKFEstimator(estimator_param);
+        initialize!(predictor.ado_estimator[new_ado], ado_pos_dict[new_ado]);
         enqueue!(predictor.ado_buffer[new_ado], ado_pos_dict[new_ado]);
     end
 end
@@ -125,21 +136,7 @@ function get_ado_input_dict(predictor::TrajectronPredictor,
     ado_input_dict = Dict{PyObject, Vector{Float64}}();
     for key in keys(ado_pos_dict)
         @assert pybuiltin("str")(key.type) == "PEDESTRIAN" "Unsupported ado type: $(pybuiltin("str")(key.type))"
-        ado_input_dict[key] = zeros(6); # [px, py, vx, vy, ax, ay]
-        ado_input_dict[key][1:2] = ado_pos_dict[key];
-        p_array = collect(predictor.ado_buffer[key]);
-        if length(p_array) == 2
-            ado_input_dict[key][3:4] = (p_array[2] .- p_array[1])./predictor.param.dto;
-        elseif length(p_array) == 3
-            if !any(isnothing.(p_array))
-                ado_input_dict[key][3:4] = (p_array[3] .- p_array[2])./predictor.param.dto;
-                ado_input_dict[key][5:6] = (p_array[3] .- 2*p_array[2] .+ p_array[1])./(predictor.param.dto^2);
-            elseif !isnothing(p_array[1])
-                ado_input_dict[key][3:4] = (p_array[3] .- p_array[1])./(predictor.param.dto*2);
-            elseif !isnothing(p_array[2])
-                ado_input_dict[key][3:4] = (p_array[3] .- p_array[2])./predictor.param.dto;
-            end
-        end
+        ado_input_dict[key] = copy(predictor.ado_estimator[key].μ);
     end
     return ado_input_dict;
 end
